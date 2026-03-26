@@ -1,0 +1,62 @@
+services:
+  db:
+    image: postgres:15
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: ${DB_USER:-user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_NAME:-mydb}
+    ports:
+      - "5444:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d   
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-user} -d ${DB_NAME:-mydb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      
+      
+  ollama:
+    build: ./ollama 
+    container_name: ollama
+    ports:
+      - "11435:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    environment:
+      #OLLAMA_MODELS: "qwen2.5:3b yxchia/multilingual-e5-base:latest qllama/multilingual-e5-small" 
+      OLLAMA_MODELS: "qwen2.5:3b yxchia/multilingual-e5-base:latest"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      
+
+  app:
+    build: .
+    container_name: streamlit_app
+    ports:
+      - "8501:8501"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-user}
+      DB_PASSWORD: ${DB_PASSWORD:-password}
+      DB_NAME: ${DB_NAME:-mydb}
+      OLLAMA_HOST: ollama:11434  
+      CHROMA_DATA: /app/chroma_data
+    volumes:
+      - ./chroma_data:/app/chroma_data
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy 
+
+volumes:
+  postgres_data:
+  ollama_models:  
+
